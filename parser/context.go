@@ -215,7 +215,24 @@ func GetVMDKContext(
 					res.total_size += extent.total_size
 
 					res.extents = append(res.extents, extent)
-				case "FLAT", "VMFS":
+				case "FLAT":
+					extent, err := GetFlatExtent(
+						reader,
+						extent_filename,
+						offsetSectors,
+						sectors,
+						res.total_size,
+						profile,
+						closer,
+					)
+
+					if err != nil {
+						return nil, fmt.Errorf("while opening %v: %w", extent_filename, err)
+					}
+
+					res.total_size += extent.TotalSize()
+					res.extents = append(res.extents, extent)
+				case "VMFS":
 					extent, err := GetFlatExtent(
 						reader,
 						extent_filename,
