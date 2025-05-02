@@ -204,7 +204,7 @@ func GetVMDKContext(
 					res.total_size += extent.total_size
 
 					res.extents = append(res.extents, extent)
-				case "FLAT":
+				case "FLAT", "VMFS":
 					sectors := ParseInt(match[2])
 					extent_filename := match[4]
 					offsetSectors := ParseInt(match[5])
