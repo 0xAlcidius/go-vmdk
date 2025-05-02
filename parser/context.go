@@ -205,6 +205,9 @@ func GetVMDKContext(
 
 					res.extents = append(res.extents, extent)
 				case "FLAT", "VMFS":
+					if extent_type == "VMFS" {
+						fmt.Println("[VMFS] extent type is deprecated, using FLAT instead")
+					}
 					sectors := ParseInt(match[2])
 					extent_filename := match[4]
 					offsetSectors := ParseInt(match[5])
@@ -224,6 +227,7 @@ func GetVMDKContext(
 					res.total_size += extent.TotalSize()
 					res.extents = append(res.extents, extent)
 				default:
+
 					return nil, errors.New("Unsupported extent type " + extent_type)
 				}
 
