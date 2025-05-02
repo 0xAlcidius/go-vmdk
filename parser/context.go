@@ -15,11 +15,14 @@ const (
 )
 
 var (
-	StartExtentRegex = regexp.MustCompile("^# Extent description")
-	ExtentRegex      = regexp.MustCompile(`(RW|R) (\d+) ([A-Z]+) "([^"]+)"`)
+	StartDescriptorRegex   = regexp.MustCompile("^# Disk DescriptorFile")
+	StartExtentRegex       = regexp.MustCompile("^# Extent description")
+	StartDiskDataBaseRegex = regexp.MustCompile("^# The Disk Data Base")
+	ExtentRegex            = regexp.MustCompile(`(RW|R) (\d+) ([A-Z]+) "([^"]+)"`)
 )
 
 type VMDKContext struct {
+	config  *VMDKConfig
 	profile *VMDKProfile
 	reader  io.ReaderAt
 
@@ -30,6 +33,10 @@ type VMDKContext struct {
 
 func (self *VMDKContext) Size() int64 {
 	return self.total_size
+}
+
+func (self *VMDKContext) Config() *VMDKConfig {
+	return self.config
 }
 
 func (self *VMDKContext) Debug() {
@@ -151,16 +158,19 @@ func GetVMDKContext(
 	opener func(filename string) (
 		reader io.ReaderAt, closer func(), err error),
 ) (*VMDKContext, error) {
+	config := NewVMDKConfig()
 	profile := NewVMDKProfile()
 	res := &VMDKContext{
+		config:  config,
 		profile: profile,
 		reader:  reader,
 	}
 
 	if size > 64*1024 {
-		size = 64 * 1024
+		size = 64 * 1024 // Read the first 64k of the file.
 	}
 
+	// Reading file descriptor.
 	buf := make([]byte, size)
 	n, err := reader.ReadAt(buf, 0)
 	if err != nil && err != io.EOF {
@@ -169,50 +179,100 @@ func GetVMDKContext(
 
 	state := ""
 	for _, line := range strings.Split(string(buf[:n]), "\n") {
+		line = strings.TrimSpace(line)
+
+		if StartDescriptorRegex.MatchString(line) {
+			state = "Descriptor"
+			continue
+		}
+
 		if StartExtentRegex.MatchString(line) {
 			state = "Extents"
 			continue
 		}
 
-		if state == "Extents" {
-			match := ExtentRegex.FindStringSubmatch(line)
-			if len(match) > 0 {
-				extent_type := match[3]
-				extent_filename := match[4]
+		if StartDiskDataBaseRegex.MatchString(line) {
+			state = "DiskDataBase"
+			continue
+		}
 
-				// Try to open the extent file.
-				reader, closer, err := opener(extent_filename)
-				if err != nil {
-					return nil, err
-				}
+		switch state {
+		case "Descriptor":
+			parseDescriptor(line, config)
+		case "Extents":
+			switch config.VMDKCreateType {
+			case TWOGBMAXEXTENTSPARSE, MONOLITHICSPARSE, VMFSSPARSE:
+				match := ExtentRegex.FindStringSubmatch(line)
+				if len(match) > 0 {
+					extent_type := match[3]
+					extent_filename := match[4]
 
-				switch extent_type {
-				case "SPARSE":
-					extent, err := GetSparseExtent(reader)
+					// Try to open the extent file.
+					reader, closer, err := opener(extent_filename)
 					if err != nil {
-						return nil, fmt.Errorf("While opening %v: %w",
-							extent_filename, err)
+						return nil, err
 					}
 
-					extent.offset = res.total_size
-					extent.closer = closer
-					extent.filename = extent_filename
+					switch extent_type {
+					case "SPARSE":
+						extent, err := GetSparseExtent(reader)
+						if err != nil {
+							return nil, fmt.Errorf("While opening %v: %w",
+								extent_filename, err)
+						}
 
-					res.total_size += extent.total_size
+						extent.offset = res.total_size
+						extent.closer = closer
+						extent.filename = extent_filename
 
-					res.extents = append(res.extents, extent)
+						res.total_size += extent.total_size
 
-				default:
-					return nil, errors.New("Unsupported extent type " + extent_type)
+						res.extents = append(res.extents, extent)
+
+					default:
+						return nil, errors.New("Unsupported extent type " + extent_type)
+					}
+
+				} else {
+					state = ""
 				}
-
-			} else {
-				state = ""
+			default:
+				break
 			}
+		case "DiskDataBase":
+			parseDiskDataBase(line, config)
 		}
 	}
 
 	res.normalizeExtents()
 
 	return res, nil
+}
+
+func parseDescriptor(line string, config *VMDKConfig) {
+	parts := strings.SplitN(line, "=", 2)
+	if len(parts) != 2 {
+		return
+	}
+	key := strings.TrimSpace(parts[0])
+	val := strings.Trim(strings.TrimSpace(parts[1]), "\"")
+
+	setter, ok := VMDKConfigSetters(config)[key]
+	if ok {
+		setter(val)
+	}
+}
+
+func parseDiskDataBase(line string, config *VMDKConfig) {
+	parts := strings.SplitN(line, "=", 2)
+	if len(parts) != 2 {
+		return
+	}
+	key := strings.TrimSpace(parts[0])
+	val := strings.Trim(strings.TrimSpace(parts[1]), "\"")
+
+	setter, ok := VMDKConfigSetters(config)[key]
+	if ok {
+		setter(val)
+	}
 }
