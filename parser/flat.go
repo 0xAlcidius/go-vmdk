@@ -79,14 +79,16 @@ func GetFlatExtent(
 	closer func(),
 ) (Extent, error) {
 
+	flatExtentHeader := &FlatExtentHeader{
+		Reader:  reader,
+		Offset:  offsetSectors * SECTOR_SIZE,
+		Profile: profile,
+	}
+
 	res := &FlatExtent{
-		profile: profile,
-		reader:  reader,
-		header: &FlatExtentHeader{
-			Reader:  reader,
-			Offset:  offsetSectors * SECTOR_SIZE,
-			Profile: profile,
-		},
+		profile:    profile,
+		reader:     reader,
+		header:     flatExtentHeader,
 		offset:     virtualOffset,
 		total_size: sectors * SECTOR_SIZE,
 		filename:   filename,
