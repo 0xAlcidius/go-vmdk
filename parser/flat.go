@@ -41,19 +41,16 @@ func (self *FlatExtent) VirtualOffset() int64 {
 }
 
 func (self *FlatExtent) ReadAt(buf []byte, offset int64) (int, error) {
-	// Ensure offset is within bounds
 	if offset < 0 || offset >= self.total_size {
 		return 0, io.EOF
 	}
 
-	// Clamp read size to the end of the extent
 	toRead := int64(len(buf))
 	if offset+toRead > self.total_size {
 		toRead = self.total_size - offset
 	}
 
-	// Adjust the offset by the extent’s start offset in the file
-	fileOffset := self.offset + offset
+	fileOffset := self.header.Offset + offset
 	return self.reader.ReadAt(buf[:toRead], fileOffset)
 }
 
