@@ -188,7 +188,7 @@ func GetVMDKContext(
 				extent_type := match[3]
 				extent_filename := match[4]
 
-				if len(match) > 5 && match[5] != "" {
+				if len(match) > 6 && match[5] != "" {
 					offsetSectors, err = ParseInt(match[5])
 					if err != nil {
 						return nil, fmt.Errorf("error occured while parsing offsetSectors: %w", err)
@@ -232,7 +232,6 @@ func GetVMDKContext(
 					res.total_size += extent.TotalSize()
 					res.extents = append(res.extents, extent)
 				default:
-
 					return nil, errors.New("Unsupported extent type " + extent_type)
 				}
 
