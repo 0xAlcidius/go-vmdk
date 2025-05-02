@@ -188,7 +188,7 @@ func GetVMDKContext(
 				extent_type := match[3]
 				extent_filename := match[4]
 
-				if len(match) > 6 && match[5] != "" {
+				if len(match) >= 6 && match[5] != "" {
 					offsetSectors, err = ParseInt(match[5])
 					if err != nil {
 						return nil, fmt.Errorf("error occured while parsing offsetSectors: %w", err)
