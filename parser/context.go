@@ -6,6 +6,7 @@ import (
 	"io"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -15,8 +16,10 @@ const (
 )
 
 var (
-	StartExtentRegex = regexp.MustCompile("^# Extent description")
-	ExtentRegex      = regexp.MustCompile(`(RW|R) (\d+) ([A-Z]+) "([^"]+)"`)
+	StartDescriptorRegex   = regexp.MustCompile("^# Disk DescriptorFile")
+	StartExtentRegex       = regexp.MustCompile("^# Extent description")
+	StartDiskDataBaseRegex = regexp.MustCompile("^# The Disk Data Base")
+	ExtentRegex            = regexp.MustCompile(`(RW|R) (\d+) ([A-Z]+) "([^"]+)"(?: (\d+))?`)
 )
 
 type VMDKContext struct {
@@ -158,9 +161,10 @@ func GetVMDKContext(
 	}
 
 	if size > 64*1024 {
-		size = 64 * 1024
+		size = 64 * 1024 // Read the first 64k of the file.
 	}
 
+	// Reading file descriptor.
 	buf := make([]byte, size)
 	n, err := reader.ReadAt(buf, 0)
 	if err != nil && err != io.EOF {
@@ -190,8 +194,7 @@ func GetVMDKContext(
 				case "SPARSE":
 					extent, err := GetSparseExtent(reader)
 					if err != nil {
-						return nil, fmt.Errorf("While opening %v: %w",
-							extent_filename, err)
+						return nil, fmt.Errorf("while opening %v: %w", extent_filename, err)
 					}
 
 					extent.offset = res.total_size
@@ -201,7 +204,25 @@ func GetVMDKContext(
 					res.total_size += extent.total_size
 
 					res.extents = append(res.extents, extent)
+				case "FLAT":
+					sectors := ParseInt(match[2])
+					extent_filename := match[4]
+					offsetSectors := ParseInt(match[5])
+					extent, err := GetFlatExtent(
+						reader,
+						extent_filename,
+						offsetSectors,
+						sectors,
+						res.total_size,
+						profile,
+						closer,
+					)
+					if err != nil {
+						return nil, fmt.Errorf("while opening flat extent %v: %w", extent_filename, err)
+					}
 
+					res.total_size += extent.TotalSize()
+					res.extents = append(res.extents, extent)
 				default:
 					return nil, errors.New("Unsupported extent type " + extent_type)
 				}
@@ -215,4 +236,12 @@ func GetVMDKContext(
 	res.normalizeExtents()
 
 	return res, nil
+}
+
+func ParseInt(s string) int64 {
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		panic("Invalid integer in descriptor: " + s)
+	}
+	return n
 }
