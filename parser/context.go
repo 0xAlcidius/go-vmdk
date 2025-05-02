@@ -161,10 +161,9 @@ func GetVMDKContext(
 	}
 
 	if size > 64*1024 {
-		size = 64 * 1024 // Read the first 64k of the file.
+		size = 64 * 1024
 	}
 
-	// Reading file descriptor.
 	buf := make([]byte, size)
 	n, err := reader.ReadAt(buf, 0)
 	if err != nil && err != io.EOF {
@@ -181,8 +180,20 @@ func GetVMDKContext(
 		if state == "Extents" {
 			match := ExtentRegex.FindStringSubmatch(line)
 			if len(match) > 0 {
+				offsetSectors := int64(0)
+				sectors, err := ParseInt(match[2])
+				if err != nil {
+					return nil, err
+				}
 				extent_type := match[3]
 				extent_filename := match[4]
+
+				if len(match) > 5 && match[5] != "" {
+					offsetSectors, err = ParseInt(match[5])
+					if err != nil {
+						return nil, fmt.Errorf("error occured while parsing offsetSectors: %w", err)
+					}
+				}
 
 				// Try to open the extent file.
 				reader, closer, err := opener(extent_filename)
@@ -190,38 +201,6 @@ func GetVMDKContext(
 					return nil, err
 				}
 
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
-				fmt.Println("[VMDK] extent filename:", extent_filename)
-				fmt.Println("[VMDK] extent type:", extent_type)
 				switch extent_type {
 				case "SPARSE":
 					extent, err := GetSparseExtent(reader)
@@ -237,15 +216,9 @@ func GetVMDKContext(
 
 					res.extents = append(res.extents, extent)
 				case "FLAT", "VMFS":
-					if extent_type == "VMFS" {
-						fmt.Println("[VMFS] extent type is deprecated, using FLAT instead")
-					}
-					sectors := ParseInt(match[2])
-					extent_filename := match[4]
-					offsetSectors := ParseInt(match[5])
 					extent, err := GetFlatExtent(
 						reader,
-						extent_filename,
+						extent_type,
 						offsetSectors,
 						sectors,
 						res.total_size,
@@ -253,7 +226,7 @@ func GetVMDKContext(
 						closer,
 					)
 					if err != nil {
-						return nil, fmt.Errorf("while opening flat extent %v: %w", extent_filename, err)
+						return nil, fmt.Errorf("while opening %v: %w", extent_filename, err)
 					}
 
 					res.total_size += extent.TotalSize()
@@ -274,10 +247,10 @@ func GetVMDKContext(
 	return res, nil
 }
 
-func ParseInt(s string) int64 {
+func ParseInt(s string) (int64, error) {
 	n, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
-		panic("Invalid integer in descriptor: " + s)
+		return 0, err
 	}
-	return n
+	return n, nil
 }

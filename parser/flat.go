@@ -78,7 +78,6 @@ func GetFlatExtent(
 	profile *VMDKProfile,
 	closer func(),
 ) (Extent, error) {
-
 	flatExtentHeader := &FlatExtentHeader{
 		Reader:  reader,
 		Offset:  offsetSectors * SECTOR_SIZE,
