@@ -190,6 +190,8 @@ func GetVMDKContext(
 					return nil, err
 				}
 
+				fmt.Println("[VMDK] extent filename:", extent_filename)
+				fmt.Println("[VMDK] extent type:", extent_type)
 				switch extent_type {
 				case "SPARSE":
 					extent, err := GetSparseExtent(reader)
