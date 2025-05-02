@@ -202,7 +202,7 @@ func GetVMDKContext(
 
 		switch state {
 
-		// Indicates a VMDK file with an embedded descriptor and disk data in the same file.
+		// Indicates a VMDK file with an embedded descriptor and virtual disk in the same file.
 		case "KDMV":
 			if strings.Contains(line, StartDescriptorRegex.String()[1:]) {
 				state = "Descriptor"
