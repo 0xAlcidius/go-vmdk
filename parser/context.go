@@ -181,6 +181,10 @@ func GetVMDKContext(
 	for _, line := range strings.Split(string(buf[:n]), "\n") {
 		line = strings.TrimSpace(line)
 
+		if strings.Contains(line, "KDMV") {
+			state = "KDMV"
+			continue
+		}
 		if StartDescriptorRegex.MatchString(line) {
 			state = "Descriptor"
 			continue
@@ -197,8 +201,14 @@ func GetVMDKContext(
 		}
 
 		switch state {
+
+		// Indicates a VMDK file with an embedded descriptor and disk data in the same file.
+		case "KDMV":
+			if strings.Contains(line, StartDescriptorRegex.String()[1:]) {
+				state = "Descriptor"
+			}
 		case "Descriptor":
-			parseDescriptor(line, config)
+			saveDescriptorSetting(line, config)
 		case "Extents":
 			switch config.VMDKCreateType {
 			case TWOGBMAXEXTENTSPARSE, MONOLITHICSPARSE, VMFSSPARSE:
@@ -240,7 +250,7 @@ func GetVMDKContext(
 				break
 			}
 		case "DiskDataBase":
-			parseDiskDataBase(line, config)
+			saveDescriptorSetting(line, config)
 		}
 	}
 
@@ -249,21 +259,7 @@ func GetVMDKContext(
 	return res, nil
 }
 
-func parseDescriptor(line string, config *VMDKConfig) {
-	parts := strings.SplitN(line, "=", 2)
-	if len(parts) != 2 {
-		return
-	}
-	key := strings.TrimSpace(parts[0])
-	val := strings.Trim(strings.TrimSpace(parts[1]), "\"")
-
-	setter, ok := VMDKConfigSetters(config)[key]
-	if ok {
-		setter(val)
-	}
-}
-
-func parseDiskDataBase(line string, config *VMDKConfig) {
+func saveDescriptorSetting(line string, config *VMDKConfig) {
 	parts := strings.SplitN(line, "=", 2)
 	if len(parts) != 2 {
 		return
