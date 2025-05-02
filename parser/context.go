@@ -1,11 +1,13 @@
 package parser
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -18,7 +20,7 @@ var (
 	StartDescriptorRegex   = regexp.MustCompile("^# Disk DescriptorFile")
 	StartExtentRegex       = regexp.MustCompile("^# Extent description")
 	StartDiskDataBaseRegex = regexp.MustCompile("^# The Disk Data Base")
-	ExtentRegex            = regexp.MustCompile(`(RW|R) (\d+) ([A-Z]+) "([^"]+)"`)
+	ExtentRegex            = regexp.MustCompile(`(RW|R) (\d+) ([A-Z]+) "([^"]+)"(?: (\d+))?`)
 )
 
 type VMDKContext struct {
@@ -178,13 +180,15 @@ func GetVMDKContext(
 	}
 
 	state := ""
+
+	// check if the file descriptor and virtual disk are in the same file.
+	if binary.LittleEndian.Uint32(buf[0:4]) == SPARSE_MAGICNUMBER {
+		state = "KDMV"
+	}
+
 	for _, line := range strings.Split(string(buf[:n]), "\n") {
 		line = strings.TrimSpace(line)
 
-		if strings.Contains(line, "KDMV") {
-			state = "KDMV"
-			continue
-		}
 		if StartDescriptorRegex.MatchString(line) {
 			state = "Descriptor"
 			continue
@@ -210,45 +214,59 @@ func GetVMDKContext(
 		case "Descriptor":
 			saveDescriptorSetting(line, config)
 		case "Extents":
-			switch config.VMDKCreateType {
-			case TWOGBMAXEXTENTSPARSE, MONOLITHICSPARSE, VMFSSPARSE:
-				match := ExtentRegex.FindStringSubmatch(line)
-				if len(match) > 0 {
-					extent_type := match[3]
-					extent_filename := match[4]
+			match := ExtentRegex.FindStringSubmatch(line)
+			if len(match) > 0 {
+				extent_type := match[3]
+				extent_filename := match[4]
 
-					// Try to open the extent file.
-					reader, closer, err := opener(extent_filename)
-					if err != nil {
-						return nil, err
-					}
-
-					switch extent_type {
-					case "SPARSE":
-						extent, err := GetSparseExtent(reader)
-						if err != nil {
-							return nil, fmt.Errorf("While opening %v: %w",
-								extent_filename, err)
-						}
-
-						extent.offset = res.total_size
-						extent.closer = closer
-						extent.filename = extent_filename
-
-						res.total_size += extent.total_size
-
-						res.extents = append(res.extents, extent)
-
-					default:
-						return nil, errors.New("Unsupported extent type " + extent_type)
-					}
-
-				} else {
-					state = ""
+				// Try to open the extent file.
+				reader, closer, err := opener(extent_filename)
+				if err != nil {
+					return nil, err
 				}
-			default:
-				break
+
+				switch extent_type {
+				case "SPARSE":
+					extent, err := GetSparseExtent(reader)
+					if err != nil {
+						return nil, fmt.Errorf("While opening %v: %w",
+							extent_filename, err)
+					}
+
+					extent.offset = res.total_size
+					extent.closer = closer
+					extent.filename = extent_filename
+
+					res.total_size += extent.total_size
+
+					res.extents = append(res.extents, extent)
+				case "FLAT":
+					sectors := ParseInt(match[2])
+					extent_filename := match[4]
+					offsetSectors := ParseInt(match[5])
+					extent, err := GetFlatExtent(
+						reader,
+						extent_filename,
+						offsetSectors,
+						sectors,
+						res.total_size, // virtual offset = where it sits in the virtual disk
+						profile,
+						closer,
+					)
+					if err != nil {
+						return nil, fmt.Errorf("While opening flat extent %v: %w", extent_filename, err)
+					}
+
+					res.total_size += extent.TotalSize()
+					res.extents = append(res.extents, extent)
+				default:
+					return nil, errors.New("Unsupported extent type " + extent_type)
+				}
+
+			} else {
+				state = ""
 			}
+
 		case "DiskDataBase":
 			saveDescriptorSetting(line, config)
 		}
@@ -271,4 +289,12 @@ func saveDescriptorSetting(line string, config *VMDKConfig) {
 	if ok {
 		setter(val)
 	}
+}
+
+func ParseInt(s string) int64 {
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		panic("Invalid integer in descriptor: " + s)
+	}
+	return n
 }
