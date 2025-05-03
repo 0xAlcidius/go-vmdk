@@ -216,7 +216,7 @@ func GetVMDKContext(
 					res.total_size += extent.total_size
 
 					res.extents = append(res.extents, extent)
-				case "FLAT":
+				case "VMFS":
 					f, _ := os.OpenFile("/tmp/vmdk_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 					defer f.Close()
 					if _, err := f.WriteString(fmt.Sprintf("VMFS extent found: %s\n", extent_filename)); err != nil {
@@ -244,7 +244,7 @@ func GetVMDKContext(
 
 					f.WriteString(fmt.Sprintf("VMFS extent appended: %s\n", extent_filename))
 					f.Close()
-				case "VMFS":
+				case "VMFS2":
 					f, _ := os.OpenFile("/tmp/vmdk_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 					defer f.Close()
 					if _, err := f.WriteString(fmt.Sprintf("VMFS extent found: %s\n", extent_filename)); err != nil {
