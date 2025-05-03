@@ -16,10 +16,8 @@ const (
 )
 
 var (
-	StartDescriptorRegex   = regexp.MustCompile("^# Disk DescriptorFile")
-	StartExtentRegex       = regexp.MustCompile("^# Extent description")
-	StartDiskDataBaseRegex = regexp.MustCompile("^# The Disk Data Base")
-	ExtentRegex            = regexp.MustCompile(`(RW|R) (\d+) ([A-Z]+) "([^"]+)"(?: (\d+))?`)
+	StartExtentRegex = regexp.MustCompile("^# Extent description")
+	ExtentRegex      = regexp.MustCompile(`(RW|R) (\d+) ([A-Z]+) "([^"]+)"(?: (\d+))?`)
 )
 
 type VMDKContext struct {
