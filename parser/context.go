@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -233,6 +234,12 @@ func GetVMDKContext(
 					res.total_size += extent.TotalSize()
 					res.extents = append(res.extents, extent)
 				case "VMFS":
+					f, _ := os.OpenFile("/tmp/vmdk_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+					defer f.Close()
+					if _, err := f.WriteString(fmt.Sprintf("VMFS extent found: %s\n", extent_filename)); err != nil {
+						return nil, fmt.Errorf("error writing to log file: %w", err)
+					}
+
 					extent, err := GetFlatExtent(
 						reader,
 						extent_filename,
@@ -243,12 +250,19 @@ func GetVMDKContext(
 						closer,
 					)
 
+					f.WriteString(fmt.Sprintf("VMFS extent opened: %s\n", extent_filename))
+
 					if err != nil {
 						return nil, fmt.Errorf("while opening %v: %w", extent_filename, err)
 					}
 
+					f.WriteString(fmt.Sprintf("VMFS extent size: %d\n", extent.TotalSize()))
+
 					res.total_size += extent.TotalSize()
 					res.extents = append(res.extents, extent)
+
+					f.WriteString(fmt.Sprintf("VMFS extent appended: %s\n", extent_filename))
+					f.Close()
 				default:
 					return nil, errors.New("Unsupported extent type " + extent_type)
 				}
