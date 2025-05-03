@@ -180,20 +180,20 @@ func GetVMDKContext(
 		if state == "Extents" {
 			match := ExtentRegex.FindStringSubmatch(line)
 			if len(match) > 0 {
-				//sectors, err := ParseInt(match[2])
+				sectors, err := ParseInt(match[2])
 				if err != nil {
 					return nil, err
 				}
 				extent_type := match[3]
 				extent_filename := match[4]
 
-				//offsetSectors := int64(0)
-				// if len(match) >= 6 && match[5] != "" {
-				// 	offsetSectors, err = ParseInt(match[5])
-				// 	if err != nil {
-				// 		return nil, fmt.Errorf("error occured while parsing offsetSectors: %w", err)
-				// 	}
-				// }
+				offsetSectors := int64(0)
+				if len(match) >= 6 && match[5] != "" {
+					offsetSectors, err = ParseInt(match[5])
+					if err != nil {
+						return nil, fmt.Errorf("error occured while parsing offsetSectors: %w", err)
+					}
+				}
 
 				// Try to open the extent file.
 				reader, closer, err := opener(extent_filename)
@@ -214,6 +214,23 @@ func GetVMDKContext(
 
 					res.total_size += extent.total_size
 
+					res.extents = append(res.extents, extent)
+				case "FLAT", "VMFS":
+					extent, err := GetFlatExtent(
+						reader,
+						extent_filename,
+						offsetSectors,
+						sectors,
+						res.total_size,
+						profile,
+						closer,
+					)
+
+					if err != nil {
+						return nil, fmt.Errorf("while opening %v: %w", extent_filename, err)
+					}
+
+					res.total_size += extent.TotalSize()
 					res.extents = append(res.extents, extent)
 				default:
 					return nil, errors.New("Unsupported extent type " + extent_type)
