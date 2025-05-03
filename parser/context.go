@@ -243,7 +243,6 @@ func GetVMDKContext(
 	}
 
 	res.normalizeExtents()
-
 	return res, nil
 }
 

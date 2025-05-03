@@ -90,6 +90,5 @@ func GetFlatExtent(
 		filename:   filename,
 		closer:     closer,
 	}
-
 	return res, nil
 }
