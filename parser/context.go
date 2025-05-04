@@ -178,7 +178,7 @@ func GetVMDKContext(
 		if state == "Extents" {
 			match := ExtentRegex.FindStringSubmatch(line)
 			if len(match) > 0 {
-				sectors, err := ParseInt(match[2])
+				sectors, err := parseInt(match[2])
 				if err != nil {
 					return nil, err
 				}
@@ -187,7 +187,7 @@ func GetVMDKContext(
 
 				offsetSectors := int64(0)
 				if len(match) >= 6 && match[5] != "" {
-					offsetSectors, err = ParseInt(match[5])
+					offsetSectors, err = parseInt(match[5])
 					if err != nil {
 						return nil, fmt.Errorf("error occured while parsing offsetSectors: %w", err)
 					}
@@ -244,7 +244,7 @@ func GetVMDKContext(
 	return res, nil
 }
 
-func ParseInt(s string) (int64, error) {
+func parseInt(s string) (int64, error) {
 	n, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
 		return 0, err
